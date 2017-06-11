@@ -33,6 +33,7 @@ The lambda code is written in Python 3.6.
 ```
 
 ### Sample utterances for intents
+```
 Ueberschriften Lies alle Überschriften vor
 Ueberschriften Was gibt es neues
 Ueberschriften Ja
@@ -44,3 +45,4 @@ Detail Nummer {ArtikelNummer}
 Detail {ArtikelNummer} vorlesen
 NoIntent Nein
 NoIntent Geh weg
+```
