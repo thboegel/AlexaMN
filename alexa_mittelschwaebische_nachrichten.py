@@ -4,6 +4,10 @@ import urllib
 import re
 from dateutil.parser import parse
 import locale
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 
 print('Loading function')
 
@@ -11,15 +15,17 @@ items = []
 
 def build_speechlet_response(title, output, reprompt_text, should_end_session):
     outputNew = '<speak>' + output + '</speak>'
+    outputNew = re.sub("\&", "", outputNew)
+
     return {
         'outputSpeech': {
             'type': 'SSML',
-            'ssml': output
+            'ssml': outputNew
         },
         'card': {
             'type': 'Simple',
             'title': "SessionSpeechlet - " + title,
-            'content': "SessionSpeechlet - " + output
+            'content': "SessionSpeechlet - " + outputNew
         },
         'reprompt': {
             'outputSpeech': {
@@ -43,8 +49,6 @@ def on_launch(request, session):
     """ Called when the user launches the skill without specifying what they
     want
     """
-    print("on_launch requestId=" + launch_request['requestId'] +
-          ", sessionId=" + session['sessionId'])
     # Dispatch to your skill's launch
     return get_welcome_response()
 
@@ -71,23 +75,29 @@ def on_session_started():
         page = response.read().decode('utf-8')
         items.extend(re.findall('<item>(.*?)</item>', page, re.S))
 
+def on_session_ended(request, session):
+    items = []
+    
 
 def on_intent(request, session):
     if (len(items) == 0):
         on_session_started()
         
-    speech_output = ""
-    
+    speech_output = "Leider habe ich dich nicht verstanden"
+    should_end_session = False
+
     if (request['intent']['name'] == 'Ueberschriften'):
         headlines = get_headlines()
         speech_output = '<p>Hier die Überschriften der aktuellen Nachrichten</p> {}'.format(headlines)
-    if (request['intent']['name'] == 'Detail'):
+    elif (request['intent']['name'] == 'Detail'):
         slotvalue = request['intent']['slots']['ArtikelNummer']['value']
         if (slotvalue == '?'):
             speech_output = "<p>Ich habe leider nicht verstanden, welcher Artikel vorgelesen werden soll. Sag bitte die Nummer dazu.</p>"
         else:
             speech_output = get_details(slotvalue)
-            
+    elif (request['intent']['name'] == 'AMAZON.StopIntent'):
+        speech_output = "<p>Tschüss!</p>"
+        should_end_session = True
     
     session_attributes = {}
     
@@ -95,7 +105,6 @@ def on_intent(request, session):
 
     # If the user either does not reply to the welcome message or says something
     # that is not understood, they will be prompted again with this text.
-    should_end_session = False
     return build_response(session_attributes, build_speechlet_response(
         card_title, speech_output, "", should_end_session))
 
@@ -104,7 +113,7 @@ def get_details(artNum):
     title = re.search('<title>(.*?)</title>', item, re.S).group(1).strip()
     titleNew = re.sub('^(.*?)\:', '<s>\\1</s>',title)
     
-    #<pubDate>	Sun, 11 Jun 2017 07:25:00 GMT</pubDate>
+    #<pubDate>  Sun, 11 Jun 2017 07:25:00 GMT</pubDate>
     pubDate = re.search('<pubDate>(.*?)</pubDate>', item, re.S).group(1).strip() 
     dt = parse(pubDate)
     dateString = dt.strftime('????%m%d')
@@ -135,12 +144,18 @@ def lambda_handler(event, context):
     """ Route the incoming request based on type (LaunchRequest, IntentRequest,
     etc.) The JSON body of the request is provided in the event parameter.
     """
-    print("event.session.application.applicationId=" +
-          event['session']['application']['applicationId'])
     
-    if event['session']['new']:
+    
+    # If the user either does not reply to the welcome message or says something
+    # that is not understood, they will be prompted again with this text.
+    logger.info('test')
+    
+    if (len(items) == 0):
         on_session_started()
     
+    logger.error('items: ' + str(len(items)))
+    print('items: ' + str(len(items)))
+
     if event['request']['type'] == "LaunchRequest":
         return on_launch(event['request'], event['session'])
     elif event['request']['type'] == "IntentRequest":
